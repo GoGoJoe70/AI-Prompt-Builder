@@ -1,0 +1,826 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: PromptKit API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: templates
+    description: Prompt template operations
+  - name: categories
+    description: Category operations
+  - name: history
+    description: Prompt history operations
+  - name: openai
+    description: OpenAI AI chat operations
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List all categories
+      responses:
+        "200":
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create a new category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created category
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /categories/{id}:
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete a category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [templates]
+      summary: List all prompt templates
+      parameters:
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+    post:
+      operationId: createTemplate
+      tags: [templates]
+      summary: Create a new prompt template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateInput"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+
+  /templates/{id}:
+    get:
+      operationId: getTemplate
+      tags: [templates]
+      summary: Get a single template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    patch:
+      operationId: updateTemplate
+      tags: [templates]
+      summary: Update a prompt template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateUpdate"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteTemplate
+      tags: [templates]
+      summary: Delete a prompt template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /templates/{id}/fire:
+    post:
+      operationId: fireTemplate
+      tags: [templates]
+      summary: Fire a template - send assembled prompt to AI (streaming SSE)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FireInput"
+      responses:
+        "200":
+          description: SSE stream of AI response chunks
+          content:
+            text/event-stream: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /fire:
+    post:
+      operationId: directFire
+      tags: [templates]
+      summary: Direct fire without a template (streaming SSE)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DirectFireInput"
+      responses:
+        "200":
+          description: SSE stream of AI response chunks
+          content:
+            text/event-stream: {}
+        "400":
+          description: Invalid request
+
+  /summarize:
+    post:
+      operationId: summarizeText
+      tags: [templates]
+      summary: Summarize or expand a block of text (streaming SSE)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SummarizeInput"
+      responses:
+        "200":
+          description: SSE stream of summarized/expanded text
+          content:
+            text/event-stream: {}
+        "400":
+          description: Invalid request
+
+  /history:
+    get:
+      operationId: listHistory
+      tags: [history]
+      summary: List prompt history entries
+      parameters:
+        - name: templateId
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of history entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryEntry"
+
+  /history/{id}:
+    delete:
+      operationId: deleteHistoryEntry
+      tags: [history]
+      summary: Delete a history entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [templates]
+      summary: Get dashboard stats - template counts, usage totals, recent activity
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+
+  /openai/conversations:
+    get:
+      operationId: listOpenaiConversations
+      tags: [openai]
+      summary: List all conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenaiConversation"
+    post:
+      operationId: createOpenaiConversation
+      tags: [openai]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenaiConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversation"
+
+  /openai/conversations/{id}:
+    get:
+      operationId: getOpenaiConversation
+      tags: [openai]
+      summary: Get conversation with messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiConversationWithMessages"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+    delete:
+      operationId: deleteOpenaiConversation
+      tags: [openai]
+      summary: Delete a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpenaiError"
+
+  /openai/conversations/{id}/messages:
+    post:
+      operationId: sendOpenaiMessage
+      tags: [openai]
+      summary: Send a text message and receive a streaming text response
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpenaiMessageInput"
+      responses:
+        "200":
+          description: SSE stream of assistant text chunks
+          content:
+            text/event-stream: {}
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - color
+        - createdAt
+
+    CategoryInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        color:
+          type: string
+      required:
+        - name
+        - color
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: integer
+        keyword:
+          type: string
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        systemPrompt:
+          type: string
+        userPromptTemplate:
+          type: string
+        categoryId:
+          type: ["integer", "null"]
+        categoryName:
+          type: ["string", "null"]
+        categoryColor:
+          type: ["string", "null"]
+        usageCount:
+          type: integer
+        isPinned:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - keyword
+        - title
+        - systemPrompt
+        - userPromptTemplate
+        - usageCount
+        - isPinned
+        - createdAt
+        - updatedAt
+
+    TemplateInput:
+      type: object
+      properties:
+        keyword:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        systemPrompt:
+          type: string
+          minLength: 1
+        userPromptTemplate:
+          type: string
+          minLength: 1
+        categoryId:
+          type: integer
+        isPinned:
+          type: boolean
+      required:
+        - keyword
+        - title
+        - systemPrompt
+        - userPromptTemplate
+
+    TemplateUpdate:
+      type: object
+      properties:
+        keyword:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        systemPrompt:
+          type: string
+          minLength: 1
+        userPromptTemplate:
+          type: string
+          minLength: 1
+        categoryId:
+          type: ["integer", "null"]
+        isPinned:
+          type: boolean
+
+    SummarizeInput:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 50000
+          description: "The text to summarize or expand"
+        level:
+          type: number
+          minimum: 0.1
+          maximum: 10
+          default: 1.0
+          description: "Multiplier: 1.0 = same length, 0.5 = half, 2.0 = double"
+      required:
+        - text
+
+    FireInput:
+      type: object
+      properties:
+        userInput:
+          type: string
+          maxLength: 10000
+        targetWordCount:
+          type: integer
+          minimum: 0
+          default: 0
+          description: "Target word count for the response. 0 means no constraint — let the model decide naturally."
+        responseFormat:
+          type: string
+          enum: [plain, markdown, bullets]
+          default: plain
+          description: "Output format: plain text, markdown, or bullet points"
+        tone:
+          type: string
+          enum: [none, upbeat, friendly, serious, skeptical, funny, concerned]
+          default: none
+          description: "Tone override for the response. 'none' means no tone instruction is added."
+        context:
+          type: string
+          default: ""
+          description: "Optional background context injected into the system prompt."
+        complexity:
+          type: number
+          minimum: 0.1
+          maximum: 10
+          default: 1.0
+          description: "Complexity multiplier: 1.0 = normal, 0.5 = simpler, 1.5 = more complex/technical."
+        toneInstruction:
+          type: string
+          default: ""
+          description: "Custom tone instruction text. If non-empty, overrides the built-in 'tone' enum mapping."
+        responseType:
+          type: string
+          default: "respond"
+          description: "Response intent: respond, explain, analyze, or a custom type id."
+        responseTypeInstruction:
+          type: string
+          default: ""
+          description: "Custom response type instruction. If non-empty, overrides the built-in responseType mapping."
+      required:
+        - userInput
+
+    DirectFireInput:
+      type: object
+      description: "Direct fire without a stored template — constructs system prompt entirely from parameters."
+      properties:
+        userInput:
+          type: string
+          maxLength: 10000
+        responseType:
+          type: string
+          default: "respond"
+        responseTypeInstruction:
+          type: string
+          default: ""
+        targetWordCount:
+          type: integer
+          minimum: 0
+          default: 0
+          description: "Target word count for the response. 0 means no constraint — let the model decide naturally."
+        responseFormat:
+          type: string
+          enum: [plain, markdown, bullets]
+          default: plain
+        tone:
+          type: string
+          enum: [none, upbeat, friendly, serious, skeptical, funny, concerned]
+          default: none
+        toneInstruction:
+          type: string
+          default: ""
+        context:
+          type: string
+          default: ""
+        complexity:
+          type: number
+          minimum: 0.1
+          maximum: 10
+          default: 1.0
+        userKnowledgeLevel:
+          type: string
+          enum: [low, normal, high]
+          default: normal
+          description: "The user's knowledge level. Low: include extra guidance and referrals. Normal/High: assume competence, omit referrals to specialists."
+      required:
+        - userInput
+
+    HistoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        templateId:
+          type: ["integer", "null"]
+        templateKeyword:
+          type: ["string", "null"]
+        templateTitle:
+          type: ["string", "null"]
+        userInput:
+          type: string
+        assembledPrompt:
+          type: string
+        response:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userInput
+        - assembledPrompt
+        - response
+        - createdAt
+
+    Stats:
+      type: object
+      properties:
+        totalTemplates:
+          type: integer
+        totalCategories:
+          type: integer
+        totalFires:
+          type: integer
+        topTemplates:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateUsageStat"
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryEntry"
+      required:
+        - totalTemplates
+        - totalCategories
+        - totalFires
+        - topTemplates
+        - recentActivity
+
+    TemplateUsageStat:
+      type: object
+      properties:
+        id:
+          type: integer
+        keyword:
+          type: string
+        title:
+          type: string
+        usageCount:
+          type: integer
+      required:
+        - id
+        - keyword
+        - title
+        - usageCount
+
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    OpenaiConversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - createdAt
+
+    OpenaiMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    OpenaiConversationInput:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+      required:
+        - title
+
+    OpenaiMessageInput:
+      type: object
+      properties:
+        content:
+          type: string
+          maxLength: 10000
+      required:
+        - content
+
+    OpenaiConversationWithMessages:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpenaiMessage"
+      required:
+        - id
+        - title
+        - createdAt
+        - messages
+
+    OpenaiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
